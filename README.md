@@ -1,20 +1,31 @@
 # AI Flashcard Generator
 
-This script generates Anki flashcards from web content using OpenAI's GPT models. It downloads the content of a given URL, uses AI to generate flashcards, and creates an Anki deck.
+This project contains two scripts that generate Anki flashcards using OpenAI's GPT models:
+1. `ai-flashcards-from-url.py`: Generates flashcards from web content.
+2. `ai-flashcards-from-manpage.py`: Generates flashcards from man pages.
+
+Both scripts use AI to generate flashcards and create Anki decks.
 
 ## Quickstart
 
-To quickly generate flashcards from a webpage, use the following command:
+To quickly generate flashcards from a webpage:
 
 ```
-python ai-flashcard-generator.py https://docs.sqlalchemy.org/en/20/glossary.html --num-cards 10 --deck-name "SQLAlchemy Glossary"
+python ai-flashcards-from-url.py https://docs.sqlalchemy.org/en/20/glossary.html --num-cards 10 --deck-name "SQLAlchemy Glossary"
 ```
 
-This will create an Anki deck named "SQLAlchemy Glossary.apkg" with 10 flashcards based on the content of the SQLAlchemy glossary page.
+To generate flashcards from a man page:
+
+```
+python ai-flashcards-from-manpage.py ls --num-cards 10 --deck-name "ls Command"
+```
+
+These commands will create Anki deck files (.apkg) with 10 flashcards each, based on the specified content.
 
 ## Features
 
 - Web scraping to extract content from a given URL
+- Man page content extraction
 - AI-powered flashcard generation using OpenAI's GPT models
 - Anki deck creation with customizable number of cards and deck name
 - Command-line interface for easy use
@@ -48,23 +59,30 @@ This will create an Anki deck named "SQLAlchemy Glossary.apkg" with 10 flashcard
 
 ## Usage
 
-Run the script with the following command:
+Run the scripts with the following commands:
 
+For web content:
 ```
-python ai-flashcard-generator.py [OPTIONS] URL
+python ai-flashcards-from-url.py [OPTIONS] URL
 ```
 
-Options:
+For man pages:
+```
+python ai-flashcards-from-manpage.py [OPTIONS] COMMAND
+```
+
+Options for both scripts:
 - `--num-cards INTEGER`: Number of flashcards to generate (default: 5)
 - `--deck-name TEXT`: Name of the generated Anki deck (default: "AI Generated Flashcards")
 - `--model TEXT`: OpenAI model to use for flashcard generation (default: "gpt-3.5-turbo")
 
-Example:
+Examples:
 ```
-python ai-flashcard-generator.py https://en.wikipedia.org/wiki/Artificial_intelligence --num-cards 10 --deck-name "AI Basics"
+python ai-flashcards-from-url.py https://en.wikipedia.org/wiki/Artificial_intelligence --num-cards 10 --deck-name "AI Basics"
+python ai-flashcards-from-manpage.py grep --num-cards 8 --deck-name "grep Command"
 ```
 
-This will generate an Anki deck file named "AI Basics.apkg" in the current directory.
+These commands will generate Anki deck files (.apkg) in the current directory.
 
 ## Dependencies
 
