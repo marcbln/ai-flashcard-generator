@@ -163,7 +163,7 @@ def generate_flashcards(command: str, sections: list, num_cards: int, model: str
 
         for line in flashcards_text.split('\n'):
             if line.startswith("Question:"):
-                question = command + ' - ' + line[9:].strip()
+                question = '[ai] ' + command + ' - ' + line[9:].strip()
             elif line.startswith("Answer:"):
                 answer = line[7:].strip()
                 section_flashcards.append((question, answer))
@@ -175,11 +175,11 @@ def generate_flashcards(command: str, sections: list, num_cards: int, model: str
     return flashcards[:num_cards]
 
 
-def create_anki_deck(flashcards: list, deck_name: str, command: str):
+def create_anki_deck(flashcards: list, deck_name: str):
     output_dir = Path("anki_decks")
     output_dir.mkdir(exist_ok=True)
 
-    filename = f"{command}.apkg" if deck_name == "Man Page Flashcards" else f"{deck_name}.apkg"
+    filename = f"{deck_name}.apkg"
     output_path = output_dir / filename
     model_id = random.randrange(1 << 30, 1 << 31)
     model = genanki.Model(
@@ -222,11 +222,13 @@ def print_flashcards(flashcards: list):
 def main(
         command: str = typer.Argument(..., help="Command name to generate flashcards from its man page"),
         num_cards: Optional[int] = typer.Option(5, help="Number of flashcards to generate"),
-        deck_name: Optional[str] = typer.Option("Man Page Flashcards", help="Name of the generated Anki deck"),
+        deck_name: Optional[str] = typer.Option(None, help="Name of the generated Anki deck (default: command name)"),
         model: Optional[str] = typer.Option("gpt-3.5-turbo", help="OpenAI model to use for flashcard generation"),
         token_limit: Optional[int] = typer.Option(TOKEN_LIMIT, help="Token limit for each section"),
         verbose: Optional[bool] = typer.Option(False, help="Print API requests and responses")
 ):
+    if deck_name is None:
+        deck_name = f"{command} Man Page Flashcards"
     global TOKEN_LIMIT
     TOKEN_LIMIT = token_limit
 
@@ -255,7 +257,7 @@ def main(
 
     with console.status("[bold green]Creating Anki deck...[/bold green]"):
         console.print(f"Creating Anki deck '{deck_name}'...")
-        output_path = create_anki_deck(flashcards, deck_name, command)
+        output_path = create_anki_deck(flashcards, deck_name)
 
     console.print(f"\n[bold green]Anki deck '{output_path}' has been created successfully.[/bold green]")
     console.print(f"Number of flashcards in the deck: {len(flashcards)}")
