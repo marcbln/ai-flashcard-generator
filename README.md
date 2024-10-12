@@ -2,6 +2,16 @@
 
 This script generates Anki flashcards from web content using OpenAI's GPT models. It downloads the content of a given URL, uses AI to generate flashcards, and creates an Anki deck.
 
+## Quickstart
+
+To quickly generate flashcards from a webpage, use the following command:
+
+```
+python ai-flashcard-generator.py https://docs.sqlalchemy.org/en/20/glossary.html --num-cards 10 --deck-name "SQLAlchemy Glossary"
+```
+
+This will create an Anki deck named "SQLAlchemy Glossary.apkg" with 10 flashcards based on the content of the SQLAlchemy glossary page.
+
 ## Features
 
 - Web scraping to extract content from a given URL
