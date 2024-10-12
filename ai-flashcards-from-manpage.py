@@ -8,6 +8,7 @@ from typing import Optional
 from rich import print as rprint
 from rich.panel import Panel
 from rich.console import Console
+from pathlib import Path
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 app = typer.Typer()
@@ -43,7 +44,14 @@ def generate_flashcards(content: str, num_cards: int, model: str) -> list:
 
     return flashcards
 
-def create_anki_deck(flashcards: list, deck_name: str):
+def create_anki_deck(flashcards: list, deck_name: str, command: str):
+    # Create a directory for storing Anki decks if it doesn't exist
+    output_dir = Path("anki_decks")
+    output_dir.mkdir(exist_ok=True)
+
+    # Use the command name as the default filename, but allow overriding with deck_name
+    filename = f"{command}.apkg" if deck_name == "Man Page Flashcards" else f"{deck_name}.apkg"
+    output_path = output_dir / filename
     model_id = random.randrange(1 << 30, 1 << 31)
     model = genanki.Model(
         model_id,
@@ -70,7 +78,8 @@ def create_anki_deck(flashcards: list, deck_name: str):
         )
         deck.add_note(note)
 
-    genanki.Package(deck).write_to_file(f'{deck_name}.apkg')
+    genanki.Package(deck).write_to_file(str(output_path))
+    return output_path
 
 def print_flashcards(flashcards: list):
     for i, (question, answer) in enumerate(flashcards, 1):
@@ -106,9 +115,9 @@ def main(
 
     with console.status("[bold green]Creating Anki deck...[/bold green]"):
         console.print(f"Creating Anki deck '{deck_name}'...")
-        create_anki_deck(flashcards, deck_name)
+        output_path = create_anki_deck(flashcards, deck_name, command)
 
-    console.print(f"\n[bold green]Anki deck '{deck_name}.apkg' has been created successfully.[/bold green]")
+    console.print(f"\n[bold green]Anki deck '{output_path}' has been created successfully.[/bold green]")
     console.print(f"Number of flashcards in the deck: {len(flashcards)}")
 
 if __name__ == "__main__":
