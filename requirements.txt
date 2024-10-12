@@ -5,4 +5,4 @@ genanki
 typer
 click
 rich
-
+tiktoken
