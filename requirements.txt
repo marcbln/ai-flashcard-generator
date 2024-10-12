@@ -1,0 +1,6 @@
+requests
+beautifulsoup4
+openai
+genanki
+typer
+click
