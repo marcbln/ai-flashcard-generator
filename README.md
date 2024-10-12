@@ -68,7 +68,17 @@ This will generate an Anki deck file named "AI Basics.apkg" in the current direc
 
 ## Dependencies
 
-See `requirements.txt` for a list of dependencies.
+The project uses the following libraries:
+
+- `requests`: For making HTTP requests to fetch web content.
+- `beautifulsoup4`: For parsing and extracting data from HTML.
+- `openai`: For generating flashcards using OpenAI's language models.
+- `genanki`: For creating Anki deck files.
+- `typer`: For building the command-line interface.
+- `click`: A dependency of Typer for creating command-line interfaces.
+- `rich`: For rich text and beautiful formatting in the terminal.
+
+See `requirements.txt` for the full list of dependencies and their versions.
 
 ## License
 
