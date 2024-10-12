@@ -7,31 +7,21 @@ section-splitting strategy to process the man page content effectively:
 1. Initial Split: The man page is first split into major sections using double newlines 
    (\n\n) as delimiters. This typically separates main sections of a man page.
 
-2. Section Joining and Refinement: The script then processes these sections:
-   a. It joins consecutive sections if their combined token count is less than a specified 
-      token limit (default 4000 tokens). This helps create more meaningful chunks of 
-      content for flashcard generation while respecting API token limits.
-   b. If a joined section exceeds the token limit, it's split again, and the process
-      continues with the next section.
-   c. Any remaining sections longer than the token limit are split into subsections
-      using single newlines (\n) as delimiters.
+2. Refinement: Each resulting section is then analyzed:
+   a. If a section is longer than 4000 characters (to stay within typical API limits), 
+      it's further split into subsections using single newlines (\n) as delimiters.
+   b. Sections under 4000 characters are kept intact.
 
 3. Flashcard Generation: The script attempts to distribute flashcard generation evenly 
-   across all processed sections, ensuring comprehensive coverage of the man page content.
-
-4. Verbose Mode: The script includes a verbose option (--verbose) that, when enabled,
-   prints the API requests and responses. This feature is useful for debugging and
-   understanding the interaction with the OpenAI API.
+   across all sections, ensuring comprehensive coverage of the man page content.
 
 This approach allows for intelligent processing of man pages, respecting their structure
-while also managing token count for effective API usage and flashcard creation.
-The verbose mode provides additional transparency into the API interactions.
+while also managing content length for effective API usage and flashcard creation.
 """
 
 import os
 import subprocess
 import re
-import textwrap
 from openai import OpenAI
 import genanki
 import random
@@ -41,27 +31,10 @@ from rich import print as rprint
 from rich.panel import Panel
 from rich.console import Console
 from pathlib import Path
-import tiktoken
-import json
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 app = typer.Typer()
 console = Console()
-
-def print_api_interaction(messages, response, verbose):
-    if verbose:
-        console.print("\n[bold]API Request:[/bold]")
-        console.print(json.dumps(messages, indent=2))
-        console.print("\n[bold]API Response:[/bold]")
-        console.print(json.dumps(response.model_dump(), indent=2))
-
-# Token limit for sections
-TOKEN_LIMIT = 4000
-
-def count_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
-    """Count the number of tokens in the given text."""
-    encoding = tiktoken.encoding_for_model(model)
-    return len(encoding.encode(text))
 
 
 def get_man_page(command: str) -> str:
@@ -72,98 +45,56 @@ def get_man_page(command: str) -> str:
         return f"Error: Unable to retrieve man page for '{command}'"
 
 
-def split_into_sections(content: str, model: str) -> list:
+def split_into_sections(content: str) -> list:
     # Split by double newlines (major sections)
     major_sections = re.split(r'\n\n+', content)
     console.print(f"[bold]Initial split:[/bold] Found {len(major_sections)} major sections")
 
-    # Join and refine sections
+    # Further split long sections by single newlines
     refined_sections = []
-    current_section = ""
     for i, section in enumerate(major_sections, 1):
-        combined_section = current_section + ("\n" if current_section else "") + section
-        if count_tokens(combined_section, model) <= TOKEN_LIMIT:
-            current_section = combined_section
-            console.print(f"  Joined section {i} to current section (current tokens: {count_tokens(current_section, model)})")
+        if len(section) > 4000:
+            subsections = section.split('\n')
+            refined_sections.extend(subsections)
+            console.print(
+                f"  Section {i}: Split into {len(subsections)} subsections (original length: {len(section)} chars)")
         else:
-            if current_section:
-                refined_sections.append(current_section)
-                console.print(f"  Added joined section to refined sections (tokens: {count_tokens(current_section, model)})")
-            current_section = section
-
-        # If the current section is too long, split it
-        while count_tokens(current_section, model) > TOKEN_LIMIT:
-            split_point = current_section.rfind('\n', 0, len(current_section) // 2)
-            if split_point == -1:
-                split_point = len(current_section) // 2
-            refined_sections.append(current_section[:split_point])
-            console.print(f"  Split long section (tokens: {count_tokens(current_section[:split_point], model)})")
-            current_section = current_section[split_point:].lstrip()
-
-    # Add any remaining content
-    if current_section:
-        refined_sections.append(current_section)
-        console.print(f"  Added final section (tokens: {count_tokens(current_section, model)})")
+            refined_sections.append(section)
+            console.print(f"  Section {i}: Kept intact (length: {len(section)} chars)")
 
     console.print(f"[bold]Final result:[/bold] {len(refined_sections)} total sections for processing")
     return refined_sections
 
 
-def generate_flashcards(command: str, sections: list, num_cards: int, model: str, verbose: bool) -> list:
+def generate_flashcards(sections: list, num_cards: int, model: str) -> list:
     flashcards = []
     cards_per_section = max(1, num_cards // len(sections))
-    extra_cards = num_cards % len(sections)
 
     for i, section in enumerate(sections, 1):
         if len(flashcards) >= num_cards:
             break
 
-        cards_to_generate = cards_per_section + (1 if i <= extra_cards else 0)
+        cards_to_generate = min(num_cards - len(flashcards), cards_per_section)
         console.print(
-            f"Generating {cards_to_generate} flashcards from section {i}/{len(sections)} (tokens: {count_tokens(section, model)})")
+            f"Generating {cards_to_generate} flashcards from section {i}/{len(sections)} (length: {len(section)} chars)")
 
-        prompt = textwrap.dedent(f"""
-            Create {cards_to_generate} flashcards from the following man page section (section {i}/{len(sections)}).
-            Format each flashcard as 
-            ```
-            Question: ... 
-            Answer: ...
-            ```
-            For each generated flashcard, if it makes sense, create an additional flashcard with inverted question and answer, example:
-
-            original flashcard:
-            Question: ls - What does the -a option do in the ls command?
-            Answer: It makes ls not ignore entries starting with '.' 
-            
-            inverted flashcard:
-            Question: ls - Which option to not ignore entries starting with '.'?
-            Answer: -a 
-            
-            Try to create flashcards with options that are commonly used or that are likely to be asked in an LPIC exam.
-            
-            MAN PAGE CONTENT:
-            
-            {section}
-        """).strip()
-
-        messages = [
-            {"role": "system", "content": "You are a helpful linux (LPIC) tutor that creates flashcards from given content."},
-            {"role": "user", "content": prompt}
-        ]
+        prompt = f"Create {cards_to_generate} flashcards from the following man page section (section {i}/{len(sections)}). Format each flashcard as 'Question: ... Answer: ...'\n\n{section[:4000]}"
 
         response = client.chat.completions.create(
             model=model,
-            messages=messages
+            messages=[
+                {"role": "system",
+                 "content": "You are a helpful assistant that creates flashcards from given content."},
+                {"role": "user", "content": prompt}
+            ]
         )
-
-        print_api_interaction(messages, response, verbose)
 
         flashcards_text = response.choices[0].message.content
         section_flashcards = []
 
         for line in flashcards_text.split('\n'):
             if line.startswith("Question:"):
-                question = command + ' - ' + line[9:].strip()
+                question = line[9:].strip()
             elif line.startswith("Answer:"):
                 answer = line[7:].strip()
                 section_flashcards.append((question, answer))
@@ -223,13 +154,8 @@ def main(
         command: str = typer.Argument(..., help="Command name to generate flashcards from its man page"),
         num_cards: Optional[int] = typer.Option(5, help="Number of flashcards to generate"),
         deck_name: Optional[str] = typer.Option("Man Page Flashcards", help="Name of the generated Anki deck"),
-        model: Optional[str] = typer.Option("gpt-3.5-turbo", help="OpenAI model to use for flashcard generation"),
-        token_limit: Optional[int] = typer.Option(TOKEN_LIMIT, help="Token limit for each section"),
-        verbose: Optional[bool] = typer.Option(False, help="Print API requests and responses")
+        model: Optional[str] = typer.Option("gpt-3.5-turbo", help="OpenAI model to use for flashcard generation")
 ):
-    global TOKEN_LIMIT
-    TOKEN_LIMIT = token_limit
-
     if not client.api_key:
         console.print("[bold red]Error:[/bold red] OPENAI_API_KEY environment variable is not set.")
         raise typer.Exit(code=1)
@@ -244,11 +170,11 @@ def main(
 
     with console.status("[bold green]Processing man page...[/bold green]"):
         console.print("Splitting man page into sections...")
-        sections = split_into_sections(content, model)
+        sections = split_into_sections(content)
 
     with console.status("[bold green]Generating flashcards...[/bold green]"):
         console.print(f"Generating {num_cards} flashcards...")
-        flashcards = generate_flashcards(command, sections, num_cards, model, verbose)
+        flashcards = generate_flashcards(sections, num_cards, model)
 
     console.print("\n[bold]Generated Flashcards:[/bold]")
     print_flashcards(flashcards)
@@ -263,5 +189,3 @@ def main(
 
 if __name__ == "__main__":
     app()
-
-
