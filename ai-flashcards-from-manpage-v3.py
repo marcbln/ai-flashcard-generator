@@ -43,6 +43,9 @@ from rich.console import Console
 from pathlib import Path
 import tiktoken
 import json
+from rich.markup import escape
+
+
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 app = typer.Typer()
@@ -111,16 +114,20 @@ def split_into_sections(content: str, model: str) -> list:
 
 def generate_flashcards(command: str, sections: list, num_cards: int, model: str, verbose: bool) -> list:
     flashcards = []
-    cards_per_section = max(1, num_cards // len(sections))
-    extra_cards = num_cards % len(sections)
+    total_tokens = sum(count_tokens(section, model) for section in sections)
 
     for i, section in enumerate(sections, 1):
-        if len(flashcards) >= num_cards:
+        section_tokens = count_tokens(section, model)
+        cards_to_generate = max(1, round((section_tokens / total_tokens) * num_cards))
+
+        if len(flashcards) + cards_to_generate > num_cards:
+            cards_to_generate = num_cards - len(flashcards)
+
+        if cards_to_generate == 0 or len(flashcards) >= num_cards:
             break
 
-        cards_to_generate = cards_per_section + (1 if i <= extra_cards else 0)
         console.print(
-            f"Generating {cards_to_generate} flashcards from section {i}/{len(sections)} (tokens: {count_tokens(section, model)})")
+            f"Generating {cards_to_generate} flashcards from section {i}/{len(sections)} (tokens: {section_tokens})")
 
         prompt = textwrap.dedent(f"""
             Create {cards_to_generate} flashcards from the following man page section (section {i}/{len(sections)}).
@@ -134,20 +141,21 @@ def generate_flashcards(command: str, sections: list, num_cards: int, model: str
             original flashcard:
             Question: ls - What does the -a option do in the ls command?
             Answer: It makes ls not ignore entries starting with '.' 
-            
+
             inverted flashcard:
             Question: ls - Which option to not ignore entries starting with '.'?
             Answer: -a 
-            
+
             Try to create flashcards with options that are commonly used or that are likely to be asked in an LPIC exam.
-            
+
             MAN PAGE CONTENT:
-            
+
             {section}
         """).strip()
 
         messages = [
-            {"role": "system", "content": "You are a helpful linux (LPIC) tutor that creates flashcards from given content."},
+            {"role": "system",
+             "content": "You are a helpful linux (LPIC) tutor that creates flashcards from given content."},
             {"role": "user", "content": prompt}
         ]
 
@@ -168,12 +176,11 @@ def generate_flashcards(command: str, sections: list, num_cards: int, model: str
                 answer = line[7:].strip()
                 section_flashcards.append((question, answer))
 
-        flashcards.extend(section_flashcards)
-        console.print(f"  Generated {len(section_flashcards)} flashcards from this section")
+        flashcards.extend(section_flashcards[:cards_to_generate])
+        console.print(f"  Generated {len(section_flashcards[:cards_to_generate])} flashcards from this section")
 
     console.print(f"[bold]Total flashcards generated:[/bold] {len(flashcards)}")
     return flashcards[:num_cards]
-
 
 def create_anki_deck(flashcards: list, deck_name: str):
     output_dir = Path("anki_decks")
@@ -213,10 +220,11 @@ def create_anki_deck(flashcards: list, deck_name: str):
 
 def print_flashcards(flashcards: list):
     for i, (question, answer) in enumerate(flashcards, 1):
-        rprint(Panel(f"[bold]Question:[/bold] {question}\n\n[bold]Answer:[/bold] {answer}",
+        escaped_question = escape(question)
+        escaped_answer = escape(answer)
+        rprint(Panel(f"[bold]Question:[/bold] {escaped_question}\n\n[bold]Answer:[/bold] {escaped_answer}",
                      title=f"Flashcard {i}",
                      expand=False))
-
 
 @app.command()
 def main(
